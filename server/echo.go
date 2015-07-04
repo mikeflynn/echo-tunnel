@@ -9,11 +9,13 @@ import (
 
 func EchoRouter() *mux.Router {
 	router := mux.NewRouter()
-	router.HandleFunc("/", echoTest)
-	router.HandleFunc("/test", echoTest)
+	router.HandleFunc("/echo/", echoTest)
+	router.HandleFunc("/echo/test", echoTest)
 	return router
 }
 
-func echoTest(w http.ResponseWriter, req *http.Request) {
-	fmt.Fprintf(w, "Echo page")
+func echoTest(rw http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(rw, "Echo page")
+
+	//foo := req.URL.Query().Get("foo")
 }

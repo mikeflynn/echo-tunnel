@@ -14,10 +14,10 @@ func PageRouter() *mux.Router {
 	return router
 }
 
-func homePage(w http.ResponseWriter, req *http.Request) {
-	fmt.Fprintf(w, "Home Page!")
+func homePage(rw http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(rw, "Home Page!")
 }
 
-func aboutPage(w http.ResponseWriter, req *http.Request) {
-	fmt.Fprintf(w, "About Page!")
+func aboutPage(rw http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(rw, "About Page!")
 }
