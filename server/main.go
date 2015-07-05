@@ -101,20 +101,27 @@ func ValidateRequest(rw http.ResponseWriter, r *http.Request, next http.HandlerF
 
 	err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA1, readerToSHA1(r.Body), encryptedSig)
 	if err != nil {
+		log.Println(err.Error())
 		log.Println("Signature match failed.")
 		http.Error(rw, "Not Authorized", 401)
 		return
 	}
 
+	log.Println("Successful Amazon request!!")
+
 	next(rw, r)
 }
 
-func readerToSHA1(input io.Reader) []byte {
+func readerToBuffer(input io.Reader) []byte {
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(input)
 
+	return buf.Bytes()
+}
+
+func readerToSHA1(input io.Reader) []byte {
 	h := sha1.New()
-	io.WriteString(h, buf.String())
+	h.Write(readerToBuffer(input))
 	return h.Sum(nil)
 }
 
@@ -130,14 +137,6 @@ func readCert(certURL string) ([]byte, error) {
 	}
 
 	return certContents, nil
-}
-
-func verifySignature() bool {
-	return false
-}
-
-func verifyCert() bool {
-	return false
 }
 
 func verifyCertURL(path string) bool {
