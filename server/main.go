@@ -40,44 +40,53 @@ func main() {
 	n.Run(":3000")
 }
 
+func HTTPError(rw http.ResponseWriter, logMsg string, err string, errCode int) {
+	if logMsg != "" {
+		log.Println(err)
+	}
+
+	http.Error(rw, err, errCode)
+}
+
 func ValidateRequest(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
-	log.Println("Checking request signature...")
+	// Check for debug bypass flag
+	if r.URL.Query().Get("_dev") != "" {
+		log.Println("_dev flag found. Bypassing security checks.")
+		next(rw, r)
+		return
+	}
 
 	certURL := r.Header.Get("SignatureCertChainUrl")
 
 	// Verify certificate URL
 	if !verifyCertURL(certURL) {
-		http.Error(rw, "Not Authorized", 401)
+		HTTPError(rw, "", "Not Authorized", 401)
 		return
 	}
 
 	// Fetch certificate data
 	certContents, err := readCert(certURL)
 	if err != nil {
-		log.Println(err.Error())
-		http.Error(rw, "Not Authorized", 401)
+		HTTPError(rw, err.Error(), "Not Authorized", 401)
 		return
 	}
 
 	// Decode certificate data
 	block, _ := pem.Decode(certContents)
 	if block == nil {
-		log.Println("Failed to parse certificate PEM.")
-		http.Error(rw, "Not Authorized", 401)
+		HTTPError(rw, "Failed to parse certificate PEM.", "Not Authorized", 401)
 		return
 	}
 
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		log.Println(err.Error())
-		http.Error(rw, "Not Authorized", 401)
+		HTTPError(rw, err.Error(), "Not Authorized", 401)
 		return
 	}
 
 	// Check the certificate date
 	if time.Now().Unix() < cert.NotBefore.Unix() || time.Now().Unix() > cert.NotAfter.Unix() {
-		log.Println("Amazon certificate expired.")
-		http.Error(rw, "Not Authorized", 401)
+		HTTPError(rw, "Amazon certificate expired.", "Not Authorized", 401)
 		return
 	}
 
@@ -90,8 +99,7 @@ func ValidateRequest(rw http.ResponseWriter, r *http.Request, next http.HandlerF
 	}
 
 	if !foundName {
-		log.Println("Amazon certificate invalid.")
-		http.Error(rw, "Not Authorized", 401)
+		HTTPError(rw, "Amazon certificate invalid.", "Not Authorized", 401)
 		return
 	}
 
@@ -101,13 +109,9 @@ func ValidateRequest(rw http.ResponseWriter, r *http.Request, next http.HandlerF
 
 	err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA1, readerToSHA1(r.Body), encryptedSig)
 	if err != nil {
-		log.Println(err.Error())
-		log.Println("Signature match failed.")
-		http.Error(rw, "Not Authorized", 401)
+		HTTPError(rw, "Signature match failed.", "Not Authorized", 401)
 		return
 	}
-
-	log.Println("Successful Amazon request!!")
 
 	next(rw, r)
 }
