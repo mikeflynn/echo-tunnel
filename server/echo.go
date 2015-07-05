@@ -45,7 +45,7 @@ type EchoIntent struct {
 	Slots map[string]EchoSlot `json:"slots"`
 }
 
-type EchoSlots struct {
+type EchoSlot struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
 }
@@ -54,19 +54,24 @@ type EchoSlots struct {
 
 type EchoResponse struct {
 	Version           string                 `json:"version"`
-	SessionAttributes map[string]interface{} `json:"sessionAttributes"`
+	SessionAttributes map[string]interface{} `json:"sessionAttributes,omitempty"`
 	Response          EchoRespBody           `json:"response"`
 }
 
 type EchoRespBody struct {
-	OutputSpeech     EchoRespPayload `json:"outputSpeech"`
-	Card             EchoRespPayload `json:"card"`
-	Reprompt         EchoRespPayload `json:"reprompt"`
+	OutputSpeech     EchoRespPayload `json:"outputSpeech,omitempty"`
+	Card             EchoRespPayload `json:"card,omitempty"`
+	Reprompt         *EchoReprompt   `json:"reprompt,omitempty"` // Pointer so it's dropped if empty in JSON response.
 	ShouldEndSession bool            `json:"shouldEndSession"`
 }
 
+type EchoReprompt struct {
+	OutputSpeech EchoRespPayload `json:"outputSpeech,omitempty"`
+}
+
 type EchoRespPayload struct {
-	Type    string `json:"type"`
-	Title   string `json:"string,omitempty"`
-	Content string `json:"string"`
+	Type    string `json:"type,omitempty"`
+	Title   string `json:"title,omitempty"`
+	Text    string `json:"text,omitempty"`
+	Content string `json:"content,omitempty"`
 }

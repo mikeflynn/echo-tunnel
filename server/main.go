@@ -26,7 +26,7 @@ func main() {
 
 	echoRouter := EchoRouter()
 	router.PathPrefix("/echo/").Handler(negroni.New(
-		negroni.HandlerFunc(ValidateRequest),
+		negroni.HandlerFunc(validateRequest),
 		negroni.Wrap(echoRouter),
 	))
 
@@ -40,54 +40,52 @@ func main() {
 	n.Run(":3000")
 }
 
-func HTTPError(rw http.ResponseWriter, logMsg string, err string, errCode int) {
+func HTTPError(w http.ResponseWriter, logMsg string, err string, errCode int) {
 	if logMsg != "" {
-		log.Println(err)
+		log.Println(logMsg)
 	}
 
-	http.Error(rw, err, errCode)
+	http.Error(w, err, errCode)
 }
 
-func ValidateRequest(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+func validateRequest(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	// Check for debug bypass flag
-	if r.URL.Query().Get("_dev") != "" {
-		log.Println("_dev flag found. Bypassing security checks.")
-		next(rw, r)
-		return
-	}
+	devFlag := r.URL.Query().Get("_dev")
 
 	certURL := r.Header.Get("SignatureCertChainUrl")
 
 	// Verify certificate URL
-	if !verifyCertURL(certURL) {
-		HTTPError(rw, "", "Not Authorized", 401)
+	if !verifyCertURL(certURL) && devFlag == "" {
+		HTTPError(w, "", "Not Authorized", 401)
 		return
 	}
 
 	// Fetch certificate data
 	certContents, err := readCert(certURL)
-	if err != nil {
-		HTTPError(rw, err.Error(), "Not Authorized", 401)
+	if err != nil && devFlag == "" {
+		HTTPError(w, err.Error(), "Not Authorized", 401)
 		return
 	}
 
 	// Decode certificate data
 	block, _ := pem.Decode(certContents)
-	if block == nil {
-		HTTPError(rw, "Failed to parse certificate PEM.", "Not Authorized", 401)
+	if block == nil && devFlag == "" {
+		HTTPError(w, "Failed to parse certificate PEM.", "Not Authorized", 401)
 		return
 	}
 
 	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		HTTPError(rw, err.Error(), "Not Authorized", 401)
+	if err != nil && devFlag == "" {
+		HTTPError(w, err.Error(), "Not Authorized", 401)
 		return
 	}
 
 	// Check the certificate date
 	if time.Now().Unix() < cert.NotBefore.Unix() || time.Now().Unix() > cert.NotAfter.Unix() {
-		HTTPError(rw, "Amazon certificate expired.", "Not Authorized", 401)
-		return
+		if devFlag == "" {
+			HTTPError(w, "Amazon certificate expired.", "Not Authorized", 401)
+			return
+		}
 	}
 
 	// Check the certificate alternate names
@@ -98,8 +96,8 @@ func ValidateRequest(rw http.ResponseWriter, r *http.Request, next http.HandlerF
 		}
 	}
 
-	if !foundName {
-		HTTPError(rw, "Amazon certificate invalid.", "Not Authorized", 401)
+	if !foundName && devFlag == "" {
+		HTTPError(w, "Amazon certificate invalid.", "Not Authorized", 401)
 		return
 	}
 
@@ -107,26 +105,24 @@ func ValidateRequest(rw http.ResponseWriter, r *http.Request, next http.HandlerF
 	publicKey := cert.PublicKey
 	encryptedSig, _ := base64.StdEncoding.DecodeString(r.Header.Get("Signature"))
 
-	err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA1, readerToSHA1(r.Body), encryptedSig)
+	// Make the request body SHA1 and verify the request with the public key
+	var bodyBuf bytes.Buffer
+	hash := sha1.New()
+	_, err = io.Copy(hash, io.TeeReader(r.Body, &bodyBuf))
 	if err != nil {
-		HTTPError(rw, "Signature match failed.", "Not Authorized", 401)
+		HTTPError(w, err.Error(), "Internal Error", 500)
+		return
+	}
+	//pretty.Println(bodyBuf.String())
+	r.Body = ioutil.NopCloser(&bodyBuf)
+
+	err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA1, hash.Sum(nil), encryptedSig)
+	if err != nil && devFlag == "" {
+		HTTPError(w, "Signature match failed.", "Not Authorized", 401)
 		return
 	}
 
-	next(rw, r)
-}
-
-func readerToBuffer(input io.Reader) []byte {
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(input)
-
-	return buf.Bytes()
-}
-
-func readerToSHA1(input io.Reader) []byte {
-	h := sha1.New()
-	h.Write(readerToBuffer(input))
-	return h.Sum(nil)
+	next(w, r)
 }
 
 func readCert(certURL string) ([]byte, error) {
