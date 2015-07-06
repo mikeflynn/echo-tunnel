@@ -1,4 +1,5 @@
 # Echo Tunnel
-Echo Tunnel is an Amazon Echo application that pipes voice commands to a client running on a computer.
+
+Playing around with a Amazon Echo web service server written in Go.
 
 Copyright 2015 Mike Flynn / [@thatmikeflynn](https://twitter.com/thatmikeflynn)
