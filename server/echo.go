@@ -1,6 +1,110 @@
 package main
 
-import ()
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"time"
+)
+
+// Request Functions
+func (this *EchoRequest) VerifyTimestamp() bool {
+	reqTimestamp, _ := time.Parse("2006-01-02T15:04:05Z", this.Request.Timestamp)
+	if time.Since(reqTimestamp) < int64(time.Duration(150)*time.Second) {
+		return true
+	}
+
+	return false
+}
+
+func (this *EchoRequest) VerifyAppID(myAppID string) bool {
+	if this.Session.Application.ApplicationID == myAppID {
+		return true
+	}
+
+	return false
+}
+
+func (this *EchoRequest) GetSessionID() string {
+	return this.Session.SessionID
+}
+
+func (this *EchoRequest) GetUserID() string {
+	return this.Session.User.UserID
+}
+
+func (this *EchoRequest) GetRequestType() string {
+	return this.Request.Type
+}
+
+func (this *EchoRequest) GetSlotValue(slotName string) (string, error) {
+	if this.Request.Intent.Slots[slotName] {
+		return this.Request.Intent.Slots[slotName].Value, nil
+	}
+
+	return nil, errors.New("Slot name not found.")
+}
+
+func (this *EchoRequst) AllSlots() map[string]EchoSlot {
+	return this.Request.Intent.Slots
+}
+
+// Response Functions
+func NewEchoResponse() *EchoResponse {
+	er := &EchoResponse{
+		Version: "1.0",
+		Response: EchoRespBody{
+			ShouldEndSession: true,
+		},
+	}
+
+	return er
+}
+
+func (this *EchoResponse) OutputSpeech(text string) *EchoResponse {
+	this.Response.OutputSpeech = EchoRespPayload{
+		Type: "PlainText",
+		Text: text,
+	}
+
+	return this
+}
+
+func (this *EchoResponse) Card(title string, content string) *EchoResponse {
+	this.Response.Card = EchoRespPayload{
+		Type:  "Simple",
+		Title: title,
+		Text:  content,
+	}
+
+	return this
+}
+
+func (this *EchoResponse) Reprompt(text string) *EchoResponse {
+	this.Response.Reprompt = &EchoReprompt{
+		OutputSpeech: EchoRespPayload{
+			Type: "PlainText",
+			Text: text,
+		},
+	}
+
+	return this
+}
+
+func (this *EchoResponse) EndSession(flag bool) *EchoResponse {
+	this.Response.ShouldEndSession = flag
+
+	return this
+}
+
+func (this *EchoResponse) String() (string, err) {
+	jsonStr, err := json.Marshal(this)
+	if err != nil {
+		return nil, err
+	}
+
+	return jsonStr, nil
+}
 
 // Request Types
 
