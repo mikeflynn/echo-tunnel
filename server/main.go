@@ -22,12 +22,27 @@ import (
 	"github.com/gorilla/mux"
 )
 
+type EchoApplication struct {
+	appID   string
+	handler func(http.ResponseWriter, *http.Request)
+}
+
+// Add your Echo app information here...
+var Applications = map[string]EchoApplication{
+	"/echo/test": EchoApplication{ // Route
+		appID:   "amzn1.echo-sdk-ams.app.872bfbc9-005e-47f3-a02a-c8c657d4e0f2", // Echo App ID
+		handler: EchoHelloWorld,                                                // Handler Func
+	},
+}
+
 func main() {
 	router := mux.NewRouter()
 
 	// /echo/* Endpoints
 	echoRouter := mux.NewRouter()
-	echoRouter.HandleFunc("/echo/test", EchoHelloWorld)
+	for uri, meta := range Applications {
+		echoRouter.HandleFunc(uri, meta.handler).Methods("POST")
+	}
 
 	router.PathPrefix("/echo/").Handler(negroni.New(
 		negroni.HandlerFunc(validateRequest),
@@ -63,11 +78,22 @@ func verifyJSON(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	err := json.NewDecoder(r.Body).Decode(&echoReq)
 	if err != nil {
 		HTTPError(w, err.Error(), "Bad Request", 400)
+		return
 	}
 
 	// Check the timestamp
+	if !echoReq.VerifyTimestamp() {
+		HTTPError(w, "Request too old to continue (>150s).", "Bad Request", 400)
+		return
+	}
 
 	// Check the app id
+	if !echoReq.VerifyAppID(Applications[r.URL.Path].appID) {
+		HTTPError(w, "Echo AppID mismatch!", "Bad Request", 400)
+		return
+	}
+
+	context.Set(r, "echoRequest", echoReq)
 
 	next(w, r)
 }

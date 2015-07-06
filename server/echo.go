@@ -3,14 +3,13 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"net/http"
 	"time"
 )
 
 // Request Functions
 func (this *EchoRequest) VerifyTimestamp() bool {
 	reqTimestamp, _ := time.Parse("2006-01-02T15:04:05Z", this.Request.Timestamp)
-	if time.Since(reqTimestamp) < int64(time.Duration(150)*time.Second) {
+	if time.Since(reqTimestamp) < time.Duration(150)*time.Second {
 		return true
 	}
 
@@ -38,14 +37,14 @@ func (this *EchoRequest) GetRequestType() string {
 }
 
 func (this *EchoRequest) GetSlotValue(slotName string) (string, error) {
-	if this.Request.Intent.Slots[slotName] {
+	if _, ok := this.Request.Intent.Slots[slotName]; ok {
 		return this.Request.Intent.Slots[slotName].Value, nil
 	}
 
-	return nil, errors.New("Slot name not found.")
+	return "", errors.New("Slot name not found.")
 }
 
-func (this *EchoRequst) AllSlots() map[string]EchoSlot {
+func (this *EchoRequest) AllSlots() map[string]EchoSlot {
 	return this.Request.Intent.Slots
 }
 
@@ -97,7 +96,7 @@ func (this *EchoResponse) EndSession(flag bool) *EchoResponse {
 	return this
 }
 
-func (this *EchoResponse) String() (string, err) {
+func (this *EchoResponse) String() ([]byte, error) {
 	jsonStr, err := json.Marshal(this)
 	if err != nil {
 		return nil, err
