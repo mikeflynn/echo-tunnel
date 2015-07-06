@@ -1,14 +1,6 @@
 package main
 
-import (
-	"github.com/gorilla/mux"
-)
-
-func EchoRouter() *mux.Router {
-	router := mux.NewRouter()
-	router.HandleFunc("/echo/test", EchoHelloWorld)
-	return router
-}
+import ()
 
 // Request Types
 

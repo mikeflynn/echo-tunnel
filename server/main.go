@@ -7,6 +7,7 @@ import (
 	"crypto/sha1"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"io"
@@ -17,20 +18,28 @@ import (
 	"time"
 
 	"github.com/codegangsta/negroni"
+	"github.com/gorilla/context"
 	"github.com/gorilla/mux"
-	//"github.com/kr/pretty"
 )
 
 func main() {
 	router := mux.NewRouter()
 
-	echoRouter := EchoRouter()
+	// /echo/* Endpoints
+	echoRouter := mux.NewRouter()
+	echoRouter.HandleFunc("/echo/test", EchoHelloWorld)
+
 	router.PathPrefix("/echo/").Handler(negroni.New(
 		negroni.HandlerFunc(validateRequest),
+		negroni.HandlerFunc(verifyJSON),
 		negroni.Wrap(echoRouter),
 	))
 
-	pageRouter := PageRouter()
+	// /* Endpoints
+	pageRouter := mux.NewRouter()
+	pageRouter.HandleFunc("/", HomePage)
+	pageRouter.HandleFunc("/about", AboutPage)
+
 	router.PathPrefix("/").Handler(negroni.New(
 		negroni.Wrap(pageRouter),
 	))
@@ -48,6 +57,22 @@ func HTTPError(w http.ResponseWriter, logMsg string, err string, errCode int) {
 	http.Error(w, err, errCode)
 }
 
+// Decode the JSON request and verify it.
+func verifyJSON(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+	var echoReq EchoRequest
+	err := json.NewDecoder(r.Body).Decode(&echoReq)
+	if err != nil {
+		HTTPError(w, err.Error(), "Bad Request", 400)
+	}
+
+	// Check the timestamp
+
+	// Check the app id
+
+	next(w, r)
+}
+
+// Run all mandatory Amazon security checks on the request.
 func validateRequest(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	// Check for debug bypass flag
 	devFlag := r.URL.Query().Get("_dev")
@@ -113,7 +138,7 @@ func validateRequest(w http.ResponseWriter, r *http.Request, next http.HandlerFu
 		HTTPError(w, err.Error(), "Internal Error", 500)
 		return
 	}
-	//pretty.Println(bodyBuf.String())
+	//log.Println(bodyBuf.String())
 	r.Body = ioutil.NopCloser(&bodyBuf)
 
 	err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA1, hash.Sum(nil), encryptedSig)
