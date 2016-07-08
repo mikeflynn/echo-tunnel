@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	//"github.com/mikeflynn/go-alexa/skillserver"
@@ -74,18 +77,12 @@ func joinHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 	}
 
-	fmt.Printf("Received: %s\n", message)
+	fmt.Printf("NEW CLIENT: %s\n", message)
 
 	conn := &Conn{send: make(chan []byte, 256), ws: ws}
 	go conn.writePump()
 
 	index[string(message)] = conn
-
-	fmt.Println("Current clients:")
-	for id, _ := range index {
-		fmt.Println(id)
-	}
-	fmt.Println("---------------")
 
 	err = ws.WriteMessage(mt, []byte("Welcome, "+string(message)))
 	if err != nil {
@@ -104,6 +101,40 @@ func pushMessages() {
 	}
 }
 
+func repl() {
+	var line string
+	var err error
+
+	fmt.Printf("Terminal\n" + "==========================\n\n")
+
+	for {
+		fmt.Printf("> ")
+
+		in := bufio.NewReader(os.Stdin)
+		if line, err = in.ReadString('\n'); err != nil {
+			log.Fatal(err)
+		}
+
+		commands := strings.Split(line, " ")
+		switch {
+		case strings.TrimSpace(commands[0]) == "list":
+			fmt.Println("Current clients:")
+			for name, _ := range index {
+				fmt.Println("* " + name)
+			}
+			fmt.Println("================")
+		case strings.TrimSpace(commands[0]) == "send":
+			if ws, ok := index[commands[1]]; ok {
+				ws.send <- []byte(strings.TrimSpace(strings.Join(commands[2:], " ")))
+			} else {
+				fmt.Println("Invalid client.")
+			}
+		default:
+			fmt.Println("Invalid command. Try \"commands\" for a command list.")
+		}
+	}
+}
+
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 func RandStringBytes(n int) string {
@@ -118,9 +149,12 @@ func main() {
 	go pushMessages()
 
 	http.HandleFunc("/join", joinHandler)
-	err := http.ListenAndServe(":8888", nil)
-	if err != nil {
-		panic("ListenAndServe: " + err.Error())
-	}
+	go func() {
+		err := http.ListenAndServe(":8888", nil)
+		if err != nil {
+			panic("ListenAndServe: " + err.Error())
+		}
+	}()
 
+	repl()
 }
