@@ -90,7 +90,7 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 		session.Target = target
 		session.Update(db)
 
-		res.OutputSpeech("What command do you want to run?").EndSession(false)
+		runCommand(session, res)
 	case "RunCommand":
 		cmd, err := req.GetSlotValue("cmd")
 		if err != nil {
@@ -101,17 +101,28 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 		session.Cmd = cmd
 
 		payload, _ := req.GetSlotValue("payload")
-		fmt.Println("Payload: " + payload)
 		session.Payload = payload
 		session.Update(db)
 
-		fmt.Println(cmd + " " + payload)
-
-		connIdx[session.Target].send <- []byte(cmd + " " + payload)
-		res.OutputSpeech("Done!").EndSession(true)
+		runCommand(session, res)
 	default:
 		res.OutputSpeech("I'm sorry, I didn't understand your request.").EndSession(false)
 	}
+}
+
+func runCommand(session *TunnelSession, res *alexa.EchoResponse) {
+	if session.Target == "" {
+		res.OutputSpeech("Which computer do you want to run this on?").EndSession(false)
+		return
+	}
+
+	if session.Cmd == "" {
+		res.OutputSpeech("What should I tell " + session.Target + "to do?").EndSession(false)
+		return
+	}
+
+	connIdx[session.Target].send <- []byte(session.Cmd + " " + session.Payload)
+	res.OutputSpeech("Done!").EndSession(true)
 }
 
 var Applications = map[string]interface{}{
