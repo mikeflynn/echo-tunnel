@@ -9,11 +9,8 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-// Config
-var origin = "http://localhost/"
-var url = "ws://localhost:8888/join"
-
 // Flags
+var server = flag.String("server", "localhost", "The hostname for your Echo Tunnel server.")
 var clientID = flag.String("id", "", "Client ID")
 var verbose = flag.Bool("v", false, "Verbose logging")
 
@@ -29,8 +26,12 @@ func main() {
 	}
 }
 
+func getServer() string {
+	return "ws://" + *server + ":80/client/join"
+}
+
 func connect(clientID string) {
-	ws, err := websocket.Dial(url, "", origin)
+	ws, err := websocket.Dial(getServer(), "", "http://localhost/")
 	if err != nil {
 		Debug(err.Error())
 		return
