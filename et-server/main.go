@@ -60,15 +60,18 @@ func Debug(msg string) {
 }
 
 func EchoLaunchHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
-	mongo, _ := GetSession(req.GetSessionID())
+	mongo, db := MongoConnect()
+	GetSession(db, req.GetSessionID())
 	defer mongo.Close()
 
 	res.OutputSpeech("Which computer do you want to connect to?").EndSession(false)
 }
 
 func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
-	mongo, session := GetSession(req.GetSessionID())
+	mongo, db := MongoConnect()
 	defer mongo.Close()
+
+	session := GetSession(db, req.GetSessionID())
 
 	switch req.GetIntentName() {
 	case "SelectBox":
@@ -85,7 +88,7 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 		}
 
 		session.Target = target
-		session.Update()
+		session.Update(db)
 
 		res.OutputSpeech("What command do you want to run?").EndSession(false)
 	case "RunCommand":
@@ -103,6 +106,7 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 		}
 
 		session.Payload = payload
+		session.Update(db)
 
 		connIdx[session.Target].send <- []byte(cmd + " " + payload)
 		res.OutputSpeech("Done!").EndSession(true)

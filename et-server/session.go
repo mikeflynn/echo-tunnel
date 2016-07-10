@@ -13,10 +13,9 @@ type TunnelSession struct {
 	Cmd       string
 	Payload   string
 	UpdatedAt int64
-	Conn      *mgo.Collection
 }
 
-func GetSession(sessid string) (*mgo.Session, *TunnelSession) {
+func MongoConnect() (*mgo.Session, *mgo.Collection) {
 	mongodb, err := mgo.Dial("localhost")
 	if err != nil {
 		Debug(err.Error())
@@ -24,11 +23,14 @@ func GetSession(sessid string) (*mgo.Session, *TunnelSession) {
 
 	col := mongodb.DB("echo").C("echotunnel")
 
+	return mongodb, col
+}
+
+func GetSession(col *mgo.Collection, sessid string) *TunnelSession {
 	user := &TunnelSession{}
-	err = col.Find(bson.M{"awsid": sessid}).One(&user)
+	err := col.Find(bson.M{"awsid": sessid}).One(&user)
 	if err != nil || user.AWSID == "" {
 		user.AWSID = sessid
-		user.Conn = col
 		user.UpdatedAt = time.Now().Unix()
 		err = col.Insert(&user)
 		if err != nil {
@@ -36,12 +38,12 @@ func GetSession(sessid string) (*mgo.Session, *TunnelSession) {
 		}
 	}
 
-	return mongodb, user
+	return user
 }
 
-func (this *TunnelSession) Update() error {
+func (this *TunnelSession) Update(col *mgo.Collection) error {
 	this.UpdatedAt = time.Now().Unix()
-	err := this.Conn.Update(bson.M{"awsid": this.AWSID}, this)
+	err := col.Update(bson.M{"awsid": this.AWSID}, this)
 	if err != nil {
 		return err
 	}
@@ -49,8 +51,8 @@ func (this *TunnelSession) Update() error {
 	return nil
 }
 
-func (this *TunnelSession) Delete() error {
-	err := this.Conn.Remove(bson.M{"awsid": this.AWSID})
+func (this *TunnelSession) Delete(col *mgo.Collection) error {
+	err := col.Remove(bson.M{"awsid": this.AWSID})
 	if err != nil {
 		return err
 	}
