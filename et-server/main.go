@@ -60,15 +60,18 @@ func Debug(msg string) {
 }
 
 func EchoLaunchHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
-	GetSession(req.GetSessionID())
+	mongo, _ := GetSession(req.GetSessionID())
+	defer mongo.Close()
+
 	res.OutputSpeech("Which computer do you want to connect to?").EndSession(false)
 }
 
 func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
+	mongo, session := GetSession(req.GetSessionID())
+	defer mongo.Close()
+
 	switch req.GetIntentName() {
 	case "SelectBox":
-		session := GetSession(req.GetSessionID())
-
 		target, _ := req.GetSlotValue("target")
 		if target == "" {
 			res.OutputSpeech("I didn't get that. Can you tell me the computer you want again?").EndSession(false)
@@ -86,8 +89,6 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 
 		res.OutputSpeech("What command do you want to run?").EndSession(false)
 	case "RunCommand":
-		session := GetSession(req.GetSessionID())
-
 		cmd, err := req.GetSlotValue("cmd")
 		if err != nil {
 			res.OutputSpeech("I'm sorry, but what should I tell " + session.Target + "to do?").EndSession(false)

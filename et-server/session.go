@@ -16,14 +16,13 @@ type TunnelSession struct {
 	Conn      *mgo.Collection
 }
 
-func GetSession(sessid string) *TunnelSession {
+func GetSession(sessid string) (*mgo.Session, *TunnelSession) {
 	mongodb, err := mgo.Dial("localhost")
 	if err != nil {
 		Debug(err.Error())
 	}
 
 	col := mongodb.DB("echo").C("echotunnel")
-	defer mongodb.Close()
 
 	user := &TunnelSession{}
 	err = col.Find(bson.M{"awsid": sessid}).One(&user)
@@ -37,7 +36,7 @@ func GetSession(sessid string) *TunnelSession {
 		}
 	}
 
-	return user
+	return mongodb, user
 }
 
 func (this *TunnelSession) Update() error {
