@@ -100,13 +100,12 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 
 		session.Cmd = cmd
 
-		payload, err := req.GetSlotValue("payload")
-		if err != nil {
-			payload = ""
-		}
-
+		payload, _ := req.GetSlotValue("payload")
+		fmt.Println("Payload: " + payload)
 		session.Payload = payload
 		session.Update(db)
+
+		fmt.Println(cmd + " " + payload)
 
 		connIdx[session.Target].send <- []byte(cmd + " " + payload)
 		res.OutputSpeech("Done!").EndSession(true)
