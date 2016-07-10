@@ -88,7 +88,7 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 
 var Applications = map[string]interface{}{
 	"/echo/tunnel": alexa.EchoApplication{ // Route
-		AppID:    "xxxxxxxx", // Echo App ID from Amazon Dashboard
+		AppID:    os.Getenv("ECHOTUNNEL_APP_ID"), // Echo App ID from Amazon Dashboard
 		OnIntent: EchoIntentHandler,
 		OnLaunch: EchoIntentHandler,
 	},
