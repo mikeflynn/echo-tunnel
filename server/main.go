@@ -2,103 +2,21 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
-	//"github.com/mikeflynn/go-alexa/skillserver"
 	"github.com/gorilla/websocket"
+	alexa "github.com/mikeflynn/go-alexa/skillserver"
 )
-
-const (
-	writeWait = 10 * time.Second
-)
-
-var (
-	newline = []byte{'\n'}
-	space   = []byte{' '}
-)
-
-type Conn struct {
-	ws   *websocket.Conn
-	send chan []byte
-}
-
-func (c *Conn) write(mt int, payload []byte) error {
-	c.ws.SetWriteDeadline(time.Now().Add(writeWait))
-	return c.ws.WriteMessage(mt, payload)
-}
-
-func (c *Conn) writePump() {
-	defer c.ws.Close()
-
-	for {
-		message, ok := <-c.send
-		if !ok {
-			c.write(websocket.CloseMessage, []byte{})
-			return
-		}
-
-		c.ws.SetWriteDeadline(time.Now().Add(writeWait))
-		w, err := c.ws.NextWriter(websocket.TextMessage)
-		if err != nil {
-			return
-		}
-
-		w.Write(message)
-
-		if err := w.Close(); err != nil {
-			return
-		}
-	}
-}
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
-}
-
-var index map[string]*Conn = map[string]*Conn{}
-
-func joinHandler(w http.ResponseWriter, r *http.Request) {
-	ws, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Print("upgrade:", err)
-		return
-	}
-
-	mt, message, err := ws.ReadMessage()
-	if err != nil {
-		log.Println(err)
-	}
-
-	fmt.Printf("NEW CLIENT: %s\n", message)
-
-	conn := &Conn{send: make(chan []byte, 256), ws: ws}
-	go conn.writePump()
-
-	index[string(message)] = conn
-
-	err = ws.WriteMessage(mt, []byte("Welcome, "+string(message)))
-	if err != nil {
-		log.Println(err)
-	}
-}
-
-func pushMessages() {
-	for {
-		for cid, conn := range index {
-			msg := []byte(cid + ": " + RandStringBytes(5))
-			conn.send <- msg
-			d, _ := time.ParseDuration("5s")
-			time.Sleep(d)
-		}
-	}
 }
 
 func repl() {
@@ -119,42 +37,99 @@ func repl() {
 		switch {
 		case strings.TrimSpace(commands[0]) == "list":
 			fmt.Println("Current clients:")
-			for name, _ := range index {
+			for name, _ := range connIdx {
 				fmt.Println("* " + name)
 			}
 			fmt.Println("================")
 		case strings.TrimSpace(commands[0]) == "send":
-			if ws, ok := index[commands[1]]; ok {
+			if ws, ok := connIdx[commands[1]]; ok {
 				ws.send <- []byte(strings.TrimSpace(strings.Join(commands[2:], " ")))
 			} else {
 				fmt.Println("Invalid client.")
 			}
 		default:
-			fmt.Println("Invalid command. Try \"commands\" for a command list.")
+			fmt.Println("Invalid command.")
 		}
 	}
 }
 
-const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-func RandStringBytes(n int) string {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+func Debug(msg string) {
+	if *verbose {
+		log.Println(msg)
 	}
-	return string(b)
 }
+
+func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
+	switch req.GetIntentName() {
+	case "Command":
+		target, err := req.GetSlotValue("target")
+		if err != nil {
+			res.OutputSpeech("You didn't tell me what computer you want to send that command to.").EndSession(true)
+			return
+		}
+
+		_, ok := connIdx[target]
+		if !ok {
+			res.OutputSpeech("Sorry, but that computer isn't online.").EndSession(true)
+			return
+		}
+
+		msg, err := req.GetSlotValue("command")
+		if err != nil {
+			res.OutputSpeech("What should I tell " + target + "to do?").EndSession(false)
+			return
+		}
+		connIdx[target].send <- []byte(msg)
+		res.OutputSpeech("Done!").EndSession(true)
+	default:
+		res.OutputSpeech("I'm sorry, I didn't understand your request.").EndSession(false)
+	}
+}
+
+var Applications = map[string]interface{}{
+	"/echo/tunnel": alexa.EchoApplication{ // Route
+		AppID:    "xxxxxxxx", // Echo App ID from Amazon Dashboard
+		OnIntent: EchoIntentHandler,
+		OnLaunch: EchoIntentHandler,
+	},
+	"/client/join": alexa.StdApplication{
+		Methods: "GET",
+		Handler: func(w http.ResponseWriter, r *http.Request) {
+			ws, err := upgrader.Upgrade(w, r, nil)
+			if err != nil {
+				Debug("Upgrade Error:" + err.Error())
+				return
+			}
+
+			mt, message, err := ws.ReadMessage()
+			if err != nil {
+				Debug(err.Error())
+			}
+
+			Debug(fmt.Sprintf("Client Connection: %s\n", message))
+
+			conn := &Conn{send: make(chan []byte, 256), ws: ws}
+			go conn.writePump()
+
+			connIdx[string(message)] = conn
+			if err = conn.write(mt, []byte("Welcome, "+string(message))); err != nil {
+				Debug(err.Error())
+			}
+		},
+	},
+}
+
+var verbose = flag.Bool("v", false, "Verbose logging.")
+var startRepl = flag.Bool("repl", false, "Start with a repl.")
+var port = flag.String("port", "8888", "Port number.")
 
 func main() {
-	go pushMessages()
+	flag.Parse()
 
-	http.HandleFunc("/join", joinHandler)
-	go func() {
-		err := http.ListenAndServe(":8888", nil)
-		if err != nil {
-			panic("ListenAndServe: " + err.Error())
-		}
-	}()
-
-	repl()
+	if *startRepl {
+		go alexa.Run(Applications, *port)
+		repl()
+	} else {
+		alexa.Run(Applications, *port)
+	}
 }
