@@ -85,7 +85,7 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 			payload := ""
 		}
 
-		connIdx[target].send <- []byte(cmd + " " + msg)
+		connIdx[target].send <- []byte(cmd + " " + payload)
 		res.OutputSpeech("Done!").EndSession(true)
 	default:
 		res.OutputSpeech("I'm sorry, I didn't understand your request.").EndSession(false)
