@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"time"
 
@@ -41,7 +42,7 @@ func connect(clientID string) {
 		Debug(err.Error())
 		return
 	}
-	Debug("Sent: %s\n", message)
+	Debug(fmt.Sprintf("Sent: %s\n", message))
 
 	for {
 		var msg = make([]byte, 512)
@@ -50,11 +51,11 @@ func connect(clientID string) {
 			Debug(err.Error())
 			return
 		}
-		Debug("Received: %s\n", msg)
+		Debug(fmt.Sprintf("Received: %s\n", msg))
 	}
 }
 
-func Debug(msg) {
+func Debug(msg string) {
 	if *verbose {
 		log.Println(msg)
 	}
