@@ -59,33 +59,51 @@ func Debug(msg string) {
 	}
 }
 
+func EchoLaunchHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
+	GetSession(req.GetSessionID())
+	res.OutputSpeech("Which computer do you want to connect to?").EndSession(false)
+}
+
 func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 	switch req.GetIntentName() {
-	case "Command":
-		target, err := req.GetSlotValue("target")
-		if err != nil {
-			res.OutputSpeech("You didn't tell me what computer you want to send that command to.").EndSession(true)
+	case "SelectBox":
+		session := GetSession(req.GetSessionID())
+
+		target, _ := req.GetSlotValue("target")
+		if target == "" {
+			res.OutputSpeech("I didn't get that. Can you tell me the computer you want again?").EndSession(false)
 			return
 		}
 
 		_, ok := connIdx[target]
 		if !ok {
-			res.OutputSpeech("Sorry, but that computer isn't online.").EndSession(true)
+			res.OutputSpeech("The computer you requested isn't online.").EndSession(true)
 			return
 		}
 
+		session.Target = target
+		session.Update()
+
+		res.OutputSpeech("What command do you want to run?").EndSession(false)
+	case "RunCommand":
+		session := GetSession(req.GetSessionID())
+
 		cmd, err := req.GetSlotValue("cmd")
 		if err != nil {
-			res.OutputSpeech("What should I tell " + target + "to do?").EndSession(false)
+			res.OutputSpeech("I'm sorry, but what should I tell " + session.Target + "to do?").EndSession(false)
 			return
 		}
+
+		session.Cmd = cmd
 
 		payload, err := req.GetSlotValue("payload")
 		if err != nil {
 			payload = ""
 		}
 
-		connIdx[target].send <- []byte(cmd + " " + payload)
+		session.Payload = payload
+
+		connIdx[session.Target].send <- []byte(cmd + " " + payload)
 		res.OutputSpeech("Done!").EndSession(true)
 	default:
 		res.OutputSpeech("I'm sorry, I didn't understand your request.").EndSession(false)
@@ -96,7 +114,7 @@ var Applications = map[string]interface{}{
 	"/echo/tunnel": alexa.EchoApplication{ // Route
 		AppID:    os.Getenv("ECHOTUNNEL_APP_ID"), // Echo App ID from Amazon Dashboard
 		OnIntent: EchoIntentHandler,
-		OnLaunch: EchoIntentHandler,
+		OnLaunch: EchoLaunchHandler,
 	},
 	"/client/join": alexa.StdApplication{
 		Methods: "GET",
