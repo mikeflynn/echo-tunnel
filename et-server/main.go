@@ -74,12 +74,18 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 			return
 		}
 
-		msg, err := req.GetSlotValue("command")
+		cmd, err := req.GetSlotValue("cmd")
 		if err != nil {
 			res.OutputSpeech("What should I tell " + target + "to do?").EndSession(false)
 			return
 		}
-		connIdx[target].send <- []byte(msg)
+
+		payload, err := req.GetSlotValue("payload")
+		if err != nil {
+			payload := ""
+		}
+
+		connIdx[target].send <- []byte(cmd + " " + msg)
 		res.OutputSpeech("Done!").EndSession(true)
 	default:
 		res.OutputSpeech("I'm sorry, I didn't understand your request.").EndSession(false)
