@@ -82,7 +82,7 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 
 		payload, err := req.GetSlotValue("payload")
 		if err != nil {
-			payload := ""
+			payload = ""
 		}
 
 		connIdx[target].send <- []byte(cmd + " " + payload)
