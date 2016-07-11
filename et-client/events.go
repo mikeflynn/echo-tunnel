@@ -47,6 +47,21 @@ var EventList map[string]*Event = map[string]*Event{
 			return result
 		},
 	},
+	"search": {
+		Description:    "Searches your computer.",
+		ArgDescription: "<term>",
+		Fn: func(args ...string) string {
+			if len(args) == 0 {
+				return "Not enough arguments."
+			} else {
+				actionScript("tell application \"System Events\" to key code 49 using (command down)")
+				actionScript("delay 1")
+				actionScript(fmt.Sprintf("tell application \"System Events\" to keystroke \"%s\"", args[0]))
+			}
+
+			return "App closed."
+		},
+	},
 	"lock": {
 		Description:    "Activates the lock screen.",
 		ArgDescription: "",

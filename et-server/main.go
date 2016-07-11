@@ -105,6 +105,13 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 		session.Update(db)
 
 		runCommand(session, res)
+	case "ListCommand":
+		names := []string{}
+		for name, _ := range connIdx {
+			names = append(names, name)
+		}
+
+		res.OutputSpeech("Your available computers are: " + strings.Join(names, ", ")).EndSession(true)
 	default:
 		res.OutputSpeech("I'm sorry, I didn't understand your request.").EndSession(false)
 	}
