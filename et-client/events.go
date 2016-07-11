@@ -50,7 +50,7 @@ var EventList map[string]*Event = map[string]*Event{
 			return result
 		},
 	},
-	"openapp": {
+	"open": {
 		Description:    "Opens an app, could be in the background.",
 		ArgDescription: "<app name> <background flag>",
 		Fn: func(args ...string) string {
@@ -85,7 +85,7 @@ var EventList map[string]*Event = map[string]*Event{
 			return "App opened."
 		},
 	},
-	"closeapp": {
+	"close": {
 		Description:    "Closes an app.",
 		ArgDescription: "<app name>",
 		Fn: func(args ...string) string {
