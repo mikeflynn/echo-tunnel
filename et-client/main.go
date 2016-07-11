@@ -4,6 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,9 +74,11 @@ func cmdPipe() {
 			continue
 		}
 
+		message = words2Int(cmdStopWords(message))
+
 		args := strings.Split(message, " ")
 
-		if args[0] == "Welcome," {
+		if args[0] == "Welcome," || args[0] == "" {
 			continue
 		}
 
@@ -87,48 +92,77 @@ func cmdPipe() {
 	}
 }
 
-/*
 func words2Int(cmd string) string {
-	numbers := map[string]int{
-		"zero":      0,
-		"one":       1,
-		"two":       2,
-		"three":     3,
-		"four":      4,
-		"five":      5,
-		"six":       6,
-		"seven":     7,
-		"eight":     8,
-		"nine":      9,
-		"ten":       10,
-		"eleven":    11,
-		"twelve":    12,
-		"thirteen":  13,
-		"fourteen":  14,
-		"fifteen":   15,
-		"sixteen":   16,
-		"seventeen": 17,
-		"eighteen":  18,
-		"nineteen":  19,
-		"twenty":    20,
-		"thirty":    30,
-		"forty":     40,
-		"fifty":     50,
-		"sixty":     60,
-		"seventy":   70,
-		"eighty":    80,
-		"ninety":    90,
-		"hundred":   100,
+	numbers := map[string]string{
+		"zero":      "0",
+		"one":       "1",
+		"two":       "2",
+		"three":     "3",
+		"four":      "4",
+		"five":      "5",
+		"six":       "6",
+		"seven":     "7",
+		"eight":     "8",
+		"nine":      "9",
+		"ten":       "10",
+		"eleven":    "11",
+		"twelve":    "12",
+		"thirteen":  "13",
+		"fourteen":  "14",
+		"fifteen":   "15",
+		"sixteen":   "16",
+		"seventeen": "17",
+		"eighteen":  "18",
+		"nineteen":  "19",
 	}
 
-	for old, new := range stopwords {
+	tens := map[string]string{
+		"twenty":  "20",
+		"thirty":  "30",
+		"forty":   "40",
+		"fifty":   "50",
+		"sixty":   "60",
+		"seventy": "70",
+		"eighty":  "80",
+		"ninety":  "90",
+		"hundred": "100",
+	}
+
+	for old, new := range tens {
 		cmd = strings.Replace(cmd, old, new, -1)
+	}
+
+	for old, new := range numbers {
+		cmd = strings.Replace(cmd, old, new, -1)
+	}
+
+	re := regexp.MustCompile("(\\d+\\s?\\d+)")
+	groups := re.FindAllString(cmd, -1)
+
+	for _, group := range groups {
+		strs := strings.Split(group, " ")
+		s1 := strs[0]
+		s2 := strs[1]
+
+		d1, _ := strconv.Atoi(s1)
+		d2, _ := strconv.Atoi(s2)
+
+		new := ""
+		if math.Mod(float64(d1), 10) == 0 && d1 > 10 {
+			new = strconv.Itoa(d1 + d2)
+		} else if d2 == 100 || d1 == 100 {
+			new = strconv.Itoa(d1 + d2)
+		}
+
+		if new != "" {
+			cmd = strings.Replace(cmd, s1+" "+s2, new, -1)
+		}
 	}
 
 	return cmd
 }
 
-func cmdStopWords(cmd) string {
+func cmdStopWords(cmd string) string {
 	stopwords := map[string]string{
 		"set":     "",
 		"the":     "",
@@ -143,7 +177,7 @@ func cmdStopWords(cmd) string {
 
 	return cmd
 }
-*/
+
 func Debug(msg string) {
 	if *verbose {
 		log.Println(msg)
