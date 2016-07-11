@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 
 	//"github.com/kr/pretty"
 	"github.com/yannk/gosx-notifier"
@@ -15,18 +16,13 @@ import (
 var EventList map[string]*Event = map[string]*Event{
 	"notify": {
 		Description:    "Fires a notification to the screen.",
-		ArgDescription: "<body> <title>",
+		ArgDescription: "<body>",
 		Fn: func(args ...string) string {
-			if len(args) < 2 {
+			if len(args) == 0 {
 				return "Not enough arguments."
 			} else {
-				title := args[1]
-				if title == "" {
-					title = "Echo Tunnel"
-				}
-
 				n := &Notification{
-					Title: title,
+					Title: "Echo Tunnel",
 					Body:  args[0],
 				}
 
@@ -37,6 +33,18 @@ var EventList map[string]*Event = map[string]*Event{
 
 				return "Notification sent."
 			}
+		},
+	},
+	"say": {
+		Description:    "Makes the computer talk.",
+		ArgDescription: "<message>",
+		Fn: func(args ...string) string {
+			result, err := termCommand("say", strings.Join(args, " "))
+			if err != nil {
+				return err.Error()
+			}
+
+			return result
 		},
 	},
 	"lock": {
