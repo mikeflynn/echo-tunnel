@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"log"
@@ -63,7 +64,7 @@ func connect(clientID string) {
 
 		Debug(fmt.Sprintf("Received: %s\n", msg))
 
-		CmdChan <- string(msg)
+		CmdChan <- string(bytes.Trim(msg, "\x00"))
 	}
 }
 
@@ -74,19 +75,25 @@ func cmdPipe() {
 			continue
 		}
 
-		message = words2Int(cmdStopWords(message))
-
-		args := strings.Split(message, " ")
-
-		if args[0] == "Welcome," || args[0] == "" {
+		if strings.HasPrefix(message, "Welcome,") || message == "" {
 			continue
 		}
 
 		Debug("Command: " + message)
 
+		message = words2Int(cmdStopWords(message))
+
+		re := regexp.MustCompile("[ ]{2,}")
+		message = re.ReplaceAllString(strings.TrimSpace(message), " ")
+
+		Debug("Normalized Command: " + message)
+
+		args := strings.Split(message, " ")
+
 		if event, ok := EventList[args[0]]; ok {
 			event.Run(args[1:]...)
 		} else {
+			Debug("Invalid command!")
 			EventList["notify"].Fn("Invalid command from Echo Tunnel.")
 		}
 	}
@@ -150,7 +157,9 @@ func words2Int(cmd string) string {
 		new := ""
 		if math.Mod(float64(d1), 10) == 0 && d1 > 10 {
 			new = strconv.Itoa(d1 + d2)
-		} else if d2 == 100 || d1 == 100 {
+		} else if d1 > 1 && d2 == 100 {
+			new = strconv.Itoa(d1 + d2)
+		} else if d1 == 100 {
 			new = strconv.Itoa(d1 + d2)
 		}
 
@@ -169,6 +178,7 @@ func cmdStopWords(cmd string) string {
 		"to":      "",
 		"please":  "",
 		"percent": "",
+		"and":     "",
 	}
 
 	for old, new := range stopwords {

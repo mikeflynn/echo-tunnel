@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strconv"
 
+	//"github.com/kr/pretty"
 	"github.com/yannk/gosx-notifier"
 )
 
@@ -52,34 +53,20 @@ var EventList map[string]*Event = map[string]*Event{
 	},
 	"open": {
 		Description:    "Opens an app, could be in the background.",
-		ArgDescription: "<app name> <background flag>",
+		ArgDescription: "<app name>",
 		Fn: func(args ...string) string {
-			var inBackground bool
-
-			if len(args) > 1 && args[1] != "0" {
-				inBackground = true
-			} else if len(args) > 0 {
-				inBackground = false
-			} else {
+			if len(args) == 0 {
 				return "Not enough arguments."
-			}
-
-			var cmd *exec.Cmd
-			if inBackground {
-				cmd = exec.Command("open", "-a", args[0], "-g")
 			} else {
-				cmd = exec.Command("open", "-a", args[0])
-			}
+				result, err := termCommand("open", "-a", args[0])
+				if err != nil {
+					Debug(err.Error())
+					actionScript(fmt.Sprintf("tell application \"%s\" to activate", args[0]))
+				}
 
-			var out bytes.Buffer
-			cmd.Stdout = &out
-			err := cmd.Run()
-			if err != nil {
-				return err.Error()
-			}
-
-			if list := out.String(); err != nil {
-				return list
+				if result != "" {
+					Debug(result)
+				}
 			}
 
 			return "App opened."
@@ -144,7 +131,7 @@ type Event struct {
 }
 
 func (this *Event) Run(args ...string) {
-	fmt.Println(this.Fn(args...))
+	Debug(this.Fn(args...))
 }
 
 func storedActionScript(scriptName string, params ...string) (string, error) {
