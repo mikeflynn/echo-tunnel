@@ -16,7 +16,8 @@ import (
 
 // Flags
 var server = flag.String("server", "localhost", "The hostname for your Echo Tunnel server.")
-var clientID = flag.String("id", "", "Client ID")
+var userID = flag.String("uid", "", "User ID")
+var clientID = flag.String("cid", "", "Client ID")
 var verbose = flag.Bool("v", false, "Verbose logging")
 
 var CmdChan chan string = make(chan string)
@@ -27,7 +28,7 @@ func main() {
 	go cmdPipe()
 
 	for {
-		connect(*clientID)
+		connect(*userID, *clientID)
 		Debug("Reconnecting in 10 seconds...")
 
 		d, _ := time.ParseDuration("10s")
@@ -39,14 +40,14 @@ func getServer() string {
 	return "ws://" + *server + ":80/client/join"
 }
 
-func connect(clientID string) {
+func connect(userID string, clientID string) {
 	ws, err := websocket.Dial(getServer(), "", "http://localhost/")
 	if err != nil {
 		Debug(err.Error())
 		return
 	}
 
-	message := []byte(clientID)
+	message := []byte(fmt.Sprintf("%s:%s", userID, clientID))
 	_, err = ws.Write(message)
 	if err != nil {
 		Debug(err.Error())
@@ -75,7 +76,7 @@ func cmdPipe() {
 			continue
 		}
 
-		if strings.HasPrefix(message, "Welcome,") || message == "" {
+		if strings.HasPrefix(message, "Welcome,") || strings.HasPrefix(message, "ERROR") || message == "" {
 			continue
 		}
 

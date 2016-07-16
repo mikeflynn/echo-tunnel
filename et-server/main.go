@@ -7,7 +7,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gorilla/websocket"
 	alexa "github.com/mikeflynn/go-alexa/skillserver"
@@ -37,13 +39,25 @@ func repl() {
 		switch {
 		case strings.TrimSpace(commands[0]) == "list":
 			fmt.Println("Current clients:")
-			for name, _ := range connIdx {
-				fmt.Println("* " + name)
+			for _, user := range UserIndex.Users {
+				for _, client := range user.Clients {
+					if client.isActive() {
+						fmt.Println(fmt.Sprintf("* %s:%s", user.ID, client.Name))
+					}
+				}
 			}
 			fmt.Println("================")
 		case strings.TrimSpace(commands[0]) == "send":
-			if ws, ok := connIdx[commands[1]]; ok {
-				ws.send <- []byte(strings.TrimSpace(strings.Join(commands[2:], " ")))
+			parts := strings.Split(commands[0], ":")
+
+			uid, err := strconv.ParseInt(parts[0], 10, 64)
+			user, err := UserIndex.getUserByID(uid)
+			if err != nil {
+				fmt.Println("Invalid client.")
+			}
+
+			if client, err := user.getClient(parts[1]); err == nil {
+				client.Connection.send <- []byte(strings.TrimSpace(strings.Join(commands[2:], " ")))
 			} else {
 				fmt.Println("Invalid client.")
 			}
@@ -64,6 +78,13 @@ func EchoLaunchHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 	GetSession(db, req.GetSessionID())
 	defer mongo.Close()
 
+	_, err := UserIndex.getUserByAmazonID(req.GetUserID())
+	if err != nil {
+		UserIndex.addUser(req.GetUserID())
+		res.OutputSpeech("Welcome new user. You need some clients to connect to us first!").EndSession(true)
+		return
+	}
+
 	res.OutputSpeech("Which computer do you want to connect to?").EndSession(false)
 }
 
@@ -73,6 +94,12 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 
 	session := GetSession(db, req.GetSessionID())
 
+	user, err := UserIndex.getUserByAmazonID(req.GetUserID())
+	if err != nil {
+		res.OutputSpeech("Sorry, we don't have an account setup for this user.").EndSession(true)
+		return
+	}
+
 	switch req.GetIntentName() {
 	case "SelectBox":
 		target, _ := req.GetSlotValue("target")
@@ -81,8 +108,7 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 			return
 		}
 
-		_, ok := connIdx[target]
-		if !ok {
+		if !user.clientExists(target) {
 			res.OutputSpeech("The computer you requested isn't online.").EndSession(true)
 			return
 		}
@@ -90,7 +116,7 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 		session.Target = target
 		session.Update(db)
 
-		runCommand(session, res)
+		runCommand(session, user, res)
 	case "RunCommand":
 		cmd, err := req.GetSlotValue("cmd")
 		if err != nil {
@@ -104,11 +130,13 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 		session.Payload = payload
 		session.Update(db)
 
-		runCommand(session, res)
+		runCommand(session, user, res)
 	case "ListCommand":
 		names := []string{}
-		for name, _ := range connIdx {
-			names = append(names, name)
+		for _, client := range user.Clients {
+			if client.isActive() {
+				names = append(names, client.Name)
+			}
 		}
 
 		res.OutputSpeech("Your available computers are: " + strings.Join(names, ", ")).EndSession(true)
@@ -117,7 +145,7 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 	}
 }
 
-func runCommand(session *TunnelSession, res *alexa.EchoResponse) {
+func runCommand(session *TunnelSession, user *User, res *alexa.EchoResponse) {
 	if session.Target == "" {
 		res.OutputSpeech("Which computer do you want to run this on?").EndSession(false)
 		return
@@ -128,7 +156,13 @@ func runCommand(session *TunnelSession, res *alexa.EchoResponse) {
 		return
 	}
 
-	connIdx[session.Target].send <- []byte(session.Cmd + " " + session.Payload)
+	client, err := user.getClient(session.Target)
+	if err != nil {
+		res.OutputSpeech("The computer you requested isn't online.").EndSession(true)
+		return
+	}
+
+	client.Connection.send <- []byte(session.Cmd + " " + session.Payload)
 	res.OutputSpeech("Done!").EndSession(true)
 }
 
@@ -157,8 +191,23 @@ var Applications = map[string]interface{}{
 			conn := &Conn{send: make(chan []byte, 256), ws: ws}
 			go conn.writePump()
 
-			connIdx[string(message)] = conn
-			if err = conn.write(mt, []byte("Welcome, "+string(message))); err != nil {
+			retMessage := ""
+
+			parts := strings.Split(string(message), ":")
+
+			uid, err := strconv.ParseInt(parts[0], 10, 64)
+			user, err := UserIndex.getUserByID(uid)
+			if err != nil {
+				retMessage = "ERROR: User ID not found."
+
+				defer close(conn.send)
+			} else {
+				user.addClient(parts[1], conn)
+
+				retMessage = fmt.Sprintf("Welcome, %s for user %s", parts[1], parts[0])
+			}
+
+			if err = conn.write(mt, []byte(retMessage)); err != nil {
 				Debug(err.Error())
 			}
 		},
@@ -168,9 +217,27 @@ var Applications = map[string]interface{}{
 var verbose = flag.Bool("v", false, "Verbose logging.")
 var startRepl = flag.Bool("repl", false, "Start with a repl.")
 var port = flag.String("port", "8888", "Port number.")
+var database = flag.String("db", "", "File path for the persistent JSON DB")
 
 func main() {
 	flag.Parse()
+
+	if *database != "" {
+		if err := UserIndex.fileLoad(*database); err != nil {
+			log.Println(err.Error())
+		}
+
+		go func() {
+			for {
+				dur, _ := time.ParseDuration("5m")
+				time.Sleep(dur)
+
+				if err := UserIndex.fileSave(*database); err != nil {
+					log.Println(err.Error())
+				}
+			}
+		}()
+	}
 
 	if *startRepl {
 		go alexa.Run(Applications, *port)
