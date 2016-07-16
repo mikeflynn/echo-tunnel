@@ -78,10 +78,10 @@ func EchoLaunchHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 	GetSession(db, req.GetSessionID())
 	defer mongo.Close()
 
-	_, err := UserIndex.getUserByAmazonID(req.GetUserID())
+	user, err := UserIndex.getUserByAmazonID(req.GetUserID())
 	if err != nil {
-		UserIndex.addUser(req.GetUserID())
-		res.OutputSpeech("Welcome new user. You need some clients to connect to us first!").EndSession(true)
+		user = UserIndex.addUser(req.GetUserID())
+		res.OutputSpeech(fmt.Sprintf("Welcome new user. Your ID is %d. You need some clients to connect to us first!", user.ID)).EndSession(true)
 		return
 	}
 
