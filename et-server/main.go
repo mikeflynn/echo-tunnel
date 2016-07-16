@@ -141,7 +141,7 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 
 		res.OutputSpeech("Your available computers are: " + strings.Join(names, ", ")).EndSession(true)
 	case "IdCommand":
-		res.OutputSpeech(fmt.Sprintf("<speak>Your user ID is <say-as interpret-as=\"digits\">%d</say-as></speak>", user.ID)).EndSession(true)
+		res.OutputSpeechSSML(fmt.Sprintf("<speak>Your user ID is <say-as interpret-as=\"digits\">%d</say-as></speak>", user.ID)).EndSession(true)
 	default:
 		res.OutputSpeech("I'm sorry, I didn't understand your request.").EndSession(false)
 	}
