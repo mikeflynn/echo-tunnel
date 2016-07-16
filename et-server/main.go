@@ -139,7 +139,13 @@ func EchoIntentHandler(req *alexa.EchoRequest, res *alexa.EchoResponse) {
 			}
 		}
 
-		res.OutputSpeech("Your available computers are: " + strings.Join(names, ", ")).EndSession(true)
+		if len(names) == 0 {
+			res.OutputSpeech("You have no available computes.").EndSession(true)
+		} else if len(names) < 2 {
+			res.OutputSpeech("You have one available computer. It's name is " + names[0]).EndSession(true)
+		} else {
+			res.OutputSpeech("You have %d available computers. They are: " + strings.Join(names, ", ")).EndSession(true)
+		}
 	case "IdCommand":
 		res.OutputSpeechSSML(fmt.Sprintf("<speak>Your user ID is <say-as interpret-as=\"digits\">%d</say-as></speak>", user.ID)).EndSession(true)
 	default:
