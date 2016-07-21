@@ -37,6 +37,17 @@ func repl() {
 
 		commands := strings.Split(line, " ")
 		switch {
+		case strings.TrimSpace(commands[0]) == "dump":
+			fmt.Println("Current DB")
+			for _, user := range UserIndex.Users {
+				fmt.Println(user.ID)
+				for _, client := range user.Clients {
+					if client.isActive() {
+						fmt.Println(fmt.Sprintf("* %s:%s", user.ID, client.Name))
+					}
+				}
+			}
+			fmt.Println("================")
 		case strings.TrimSpace(commands[0]) == "list":
 			fmt.Println("Current clients:")
 			for _, user := range UserIndex.Users {
@@ -48,7 +59,7 @@ func repl() {
 			}
 			fmt.Println("================")
 		case strings.TrimSpace(commands[0]) == "send":
-			parts := strings.Split(commands[0], ":")
+			parts := strings.Split(commands[1], ":")
 
 			uid, err := strconv.ParseInt(parts[0], 10, 64)
 			user, err := UserIndex.getUserByID(uid)
@@ -189,35 +200,31 @@ var Applications = map[string]interface{}{
 				return
 			}
 
-			mt, message, err := ws.ReadMessage()
-			if err != nil {
-				Debug(err.Error())
-			}
-
-			Debug(fmt.Sprintf("Client Connection: %s\n", message))
-
 			conn := &Conn{send: make(chan []byte, 256), ws: ws}
 			go conn.writePump()
 
-			retMessage := ""
+			conn.readCallback = func(conn *Conn, message string) {
+				Debug(fmt.Sprintf("Client Connection: %s\n", message))
 
-			parts := strings.Split(string(message), ":")
+				parts := strings.Split(string(message), ":")
 
-			uid, err := strconv.ParseInt(parts[0], 10, 64)
-			user, err := UserIndex.getUserByID(uid)
-			if err != nil {
-				retMessage = "ERROR: User ID not found."
+				uid, err := strconv.ParseInt(parts[0], 10, 64)
+				user, err := UserIndex.getUserByID(uid)
+				if err != nil {
+					conn.send <- []byte("ERROR: User ID not found.")
 
-				defer close(conn.send)
-			} else {
-				user.addClient(parts[1], conn)
+					defer close(conn.send)
+				} else {
+					user.addClient(parts[1], conn)
 
-				retMessage = fmt.Sprintf("Welcome, %s for user %s", parts[1], parts[0])
+					conn.send <- []byte(fmt.Sprintf("Welcome, %s for user %s", parts[1], parts[0]))
+				}
+
+				// Remove this callback
+				conn.readCallback = nil
 			}
 
-			if err = conn.write(mt, []byte(retMessage)); err != nil {
-				Debug(err.Error())
-			}
+			conn.readPump()
 		},
 	},
 }

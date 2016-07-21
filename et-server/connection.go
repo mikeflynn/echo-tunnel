@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -12,7 +14,10 @@ import (
 )
 
 const (
-	writeWait = 10 * time.Second
+	writeWait      = 10 * time.Second
+	pongWait       = 60 * time.Second
+	pingPeriod     = (pongWait * 9) / 10
+	maxMessageSize = 512
 )
 
 var (
@@ -149,8 +154,9 @@ func (this *Client) isActive() bool {
 }
 
 type Conn struct {
-	ws   *websocket.Conn
-	send chan []byte
+	ws           *websocket.Conn
+	send         chan []byte
+	readCallback func(*Conn, string)
 }
 
 func (c *Conn) write(mt int, payload []byte) error {
@@ -178,6 +184,31 @@ func (c *Conn) writePump() {
 
 		if err := w.Close(); err != nil {
 			return
+		}
+	}
+}
+
+func (c *Conn) readPump() {
+	defer func() {
+		c.ws.Close()
+	}()
+
+	c.ws.SetReadLimit(maxMessageSize)
+	c.ws.SetReadDeadline(time.Now().Add(pongWait))
+	c.ws.SetPongHandler(func(string) error { c.ws.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	for {
+		_, message, err := c.ws.ReadMessage()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
+				Debug(fmt.Sprintf("ERROR: %v", err))
+			}
+			break
+		}
+		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
+		Debug(string(message))
+
+		if c.readCallback != nil {
+			c.readCallback(c, string(message))
 		}
 	}
 }
