@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kardianos/service"
 	"golang.org/x/net/websocket"
 )
 
@@ -21,13 +22,21 @@ var clientID = flag.String("cid", "", "Client ID")
 var verbose = flag.Bool("v", false, "Verbose logging")
 
 var CmdChan chan string = make(chan string)
+var StopFlag bool = false
 
 func main() {
 	flag.Parse()
+}
 
+func run() {
 	go cmdPipe()
 
 	for {
+		if StopFlag {
+			Debug("Stopping client.")
+			break
+		}
+
 		connect(*userID, *clientID)
 		Debug("Reconnecting in 10 seconds...")
 
