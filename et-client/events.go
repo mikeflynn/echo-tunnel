@@ -35,6 +35,21 @@ var EventList map[string]*Event = map[string]*Event{
 			}
 		},
 	},
+	"imessage": {
+		Description:    "Sends an iMessage to a phone number.",
+		ArgDescription: "<phone number> <message>",
+		Fn: func(args ...string) string {
+			if len(args) < 2 {
+				return "Not enough arguments."
+			} else {
+				if output, err := storedActionScript("imessage.scpt", args[0], args[1]); err != nil {
+					return err.Error()
+				} else {
+					return output
+				}
+			}
+		},
+	},
 	"say": {
 		Description:    "Makes the computer talk.",
 		ArgDescription: "<message>",
