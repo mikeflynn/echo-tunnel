@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kardianos/service"
 	"golang.org/x/net/websocket"
 )
 
@@ -20,12 +19,20 @@ var server = flag.String("server", "localhost", "The hostname for your Echo Tunn
 var userID = flag.String("uid", "", "User ID")
 var clientID = flag.String("cid", "", "Client ID")
 var verbose = flag.Bool("v", false, "Verbose logging")
+var launchd = flag.String("launchd", "", "Run launchd command for a service: start, stop, restart")
 
 var CmdChan chan string = make(chan string)
 var StopFlag bool = false
 
 func main() {
 	flag.Parse()
+
+	if *launchd != "" {
+		Debug("Starting in service mode...")
+		startService()
+	} else {
+		run()
+	}
 }
 
 func run() {
